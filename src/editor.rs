@@ -1,19 +1,27 @@
 use crate::terminal::{Terminal, Position, Size};
+use crate::view::View;
 
-use crossterm::event::{read, Event, Event::Key, KeyCode::Char, KeyEvent, KeyModifiers};
+use crossterm::event::{read, Event, Event::Key, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::io::Error;
 
-const NAME: &str = env!("CARGO_PKG_NAME");
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+#[derive(Copy, Clone)]
+pub struct Location {
+    pub x: u16,
+    pub y: u16,
+}
 
 pub struct Editor {
     should_quit: bool,
+    update_cursor: bool,
+    top_left: Location,
+    location: Location,
+    update_location: Location,
 }
 
 impl Editor {
 
     pub const fn default() -> Self {
-        Self { should_quit: false }
+        Self { should_quit: false, update_cursor: true, top_left: Location{x: 0, y: 0}, location: Location{x: 0, y: 0}, update_location: Location{x: 0, y: 0} }
     }
 
     pub fn run(&mut self) {
@@ -35,53 +43,79 @@ impl Editor {
         Ok(())
     }
 
+    fn evaluate_move_event(&mut self, code: &KeyCode){
+        match code {
+            KeyCode::Up if self.update_location.y > 0 => {
+                self.update_location.y -= 1;
+                self.update_cursor = true;
+            },
+            KeyCode::Down => {
+                self.update_location.y += 1;
+                self.update_cursor = true;
+            },
+            KeyCode::Left if self.update_location.x > 0 => {
+                self.update_location.x -= 1;
+                self.update_cursor = true;
+            },
+            KeyCode::Right => {
+                self.update_location.x += 1;
+                self.update_cursor = true;
+            },
+            _ => (),
+        }
+    }
+
     fn evaluate_event(&mut self, event: &Event) {
         if let Key(KeyEvent {
-            code, modifiers, ..
+            code,
+            modifiers,
+            kind: KeyEventKind::Press,
+            ..
         }) = event {
             match code {
-                Char('q') if *modifiers == KeyModifiers::CONTROL => {
+                KeyCode::Char('q') if *modifiers == KeyModifiers::CONTROL => {
                     self.should_quit = true;
-                }
+                },
+                KeyCode::Up
+                | KeyCode::Down
+                | KeyCode::Left
+                | KeyCode::Right => {
+                    self.evaluate_move_event(code);
+                },
                 _ => (),
             }
         }
     }
 
-    fn refresh_screen(&self) -> Result<(), Error> {
+    fn refresh_screen(&mut self) -> Result<(), Error> {
         Terminal::hide_cursor()?;
         if self.should_quit {
             Terminal::clear_screen()?;
             print!("Goodbye! \r\n");
         }
         else {
-            Self::draw_rows()?;
-            Self::draw_welcome_message()?;
-            Terminal::move_cursor_to(Position{row: 0, column: 0})?;
+            let Size{num_rows, num_columns} = Terminal::size()?;
+            View::render()?;
+            if self.update_cursor {
+                if self.update_location.x < self.top_left.x {
+                    self.top_left.x = self.update_location.x;
+                }
+                if self.update_location.y < self.top_left.y {
+                    self.top_left.y = self.update_location.y;
+                }
+                if self.update_location.x >= self.top_left.x + num_columns {
+                    self.top_left.x = self.update_location.x - num_columns + 1;
+                }
+                if self.update_location.y >= self.top_left.y + num_rows {
+                    self.top_left.y = self.update_location.y - num_rows + 1;
+                }
+                self.location = self.update_location;
+                self.update_cursor = false;
+            }
+            Terminal::move_cursor_to(Position{row: self.update_location.y - self.top_left.y, column: self.update_location.x - self.top_left.x})?;
         }
         Terminal::show_cursor()?;
         Terminal::execute()?;
-        Ok(())
-    }
-
-    fn draw_rows() -> Result<(), Error> {
-        let Size{num_rows, ..} = Terminal::size()?;
-        for row in 0..num_rows {
-            Terminal::move_cursor_to(Position{row, column: 0})?;
-            Terminal::clear_line()?;
-            Terminal::print("~\r")?;
-        }
-        Ok(())
-    }
-
-    fn draw_welcome_message() -> Result<(), Error> {
-        let Size{num_rows, num_columns} = Terminal::size()?;
-        let row = num_rows / 3;
-        let mut message = format!("{NAME} Editor -- v{VERSION}");
-        message.truncate((num_columns - 1) as usize);
-        let column = (num_columns - (message.len() as u16)) / 2;
-        Terminal::move_cursor_to(Position{row, column})?;
-        Terminal::print(message)?;
         Ok(())
     }
 

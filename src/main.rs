@@ -2,6 +2,7 @@
 
 pub mod editor;
 pub mod terminal;
+pub mod view;
 use editor::Editor;
 
 fn main() { 

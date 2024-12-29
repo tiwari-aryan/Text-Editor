@@ -3,7 +3,6 @@ use crossterm::{queue, Command};
 use crossterm::cursor::{MoveTo, Show, Hide};
 use crossterm::style::Print;
 use std::io::{stdout, Write, Error};
-use std::fmt::Display;
 
 #[derive(Copy, Clone)]
 pub struct Size {
@@ -18,7 +17,7 @@ pub struct Position {
 }
 
 pub struct Terminal {
-
+    
 }
 
 impl Terminal {
@@ -42,7 +41,7 @@ impl Terminal {
         Ok(())
     }
 
-    pub fn print(string: impl Display) -> Result<(), Error> {
+    pub fn print(string: &str) -> Result<(), Error> {
         Self::queue_command(Print(string))?;
         Ok(())
     }
