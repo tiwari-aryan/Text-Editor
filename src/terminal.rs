@@ -21,7 +21,7 @@ pub struct Terminal {
 }
 
 impl Terminal {
-
+    
     pub fn initialize() -> Result<(), Error> {
         enable_raw_mode()?;
         Self::clear_screen()?;

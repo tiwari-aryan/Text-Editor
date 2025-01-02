@@ -2,33 +2,39 @@ use crate::terminal::{Terminal, Position, Size};
 use crate::view::View;
 
 use crossterm::event::{read, Event, Event::Key, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use std::io::Error;
+use std::{env, io::Error};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct Location {
     pub x: u16,
     pub y: u16,
 }
 
+#[derive(Default)]
 pub struct Editor {
     should_quit: bool,
     update_cursor: bool,
     top_left: Location,
     location: Location,
     update_location: Location,
+    view: View,
 }
 
 impl Editor {
 
-    pub const fn default() -> Self {
-        Self { should_quit: false, update_cursor: true, top_left: Location{x: 0, y: 0}, location: Location{x: 0, y: 0}, update_location: Location{x: 0, y: 0} }
-    }
-
     pub fn run(&mut self) {
         Terminal::initialize().unwrap();
+        self.handle_args();
         let result = self.repl();
         Terminal::terminate().unwrap();
         result.unwrap();
+    }
+
+    fn handle_args(&mut self) {
+        let args: Vec<String> = env::args().collect();
+        if let Some(file_path) = args.get(1) {
+            self.view.load(file_path);
+        }
     }
 
     fn repl(&mut self) -> Result<(), Error> {
@@ -91,11 +97,12 @@ impl Editor {
         Terminal::hide_cursor()?;
         if self.should_quit {
             Terminal::clear_screen()?;
+            Terminal::move_cursor_to(Position{row: 0, column: 0})?;
             print!("Goodbye! \r\n");
         }
         else {
             let Size{num_rows, num_columns} = Terminal::size()?;
-            View::render()?;
+            self.view.render()?;
             if self.update_cursor {
                 if self.update_location.x < self.top_left.x {
                     self.top_left.x = self.update_location.x;
