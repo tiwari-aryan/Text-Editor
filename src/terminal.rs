@@ -1,4 +1,4 @@
-use crossterm::terminal::{enable_raw_mode, disable_raw_mode, Clear, ClearType, size};
+use crossterm::terminal::{enable_raw_mode, disable_raw_mode, Clear, ClearType, size, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{queue, Command};
 use crossterm::cursor::{MoveTo, Show, Hide};
 use crossterm::style::Print;
@@ -38,6 +38,16 @@ impl Terminal {
 
     pub fn execute() -> Result<(), Error> {
         stdout().flush()?;
+        Ok(())
+    }
+
+    pub fn enter_alternate_screen() -> Result<(), Error> {
+        Self::queue_command(EnterAlternateScreen)?;
+        Ok(())
+    }
+
+    pub fn leave_alternate_screen() -> Result<(), Error> {
+        Self::queue_command(LeaveAlternateScreen)?;
         Ok(())
     }
 

@@ -1,7 +1,7 @@
 use crate::terminal::{Terminal, Position, Size};
 use crate::view::View;
 
-use crossterm::event::{read, Event, Event::Key, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{read, Event, Event::{Key, Resize}, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::{env, io::Error};
 
 #[derive(Copy, Clone, Default)]
@@ -23,11 +23,14 @@ pub struct Editor {
 impl Editor {
 
     pub fn run(&mut self) {
+        Terminal::enter_alternate_screen().unwrap();
         Terminal::initialize().unwrap();
         self.handle_args();
         let result = self.repl();
         Terminal::terminate().unwrap();
+        Terminal::leave_alternate_screen().unwrap();
         result.unwrap();
+        print!("Goodbye! \r\n");
     }
 
     fn handle_args(&mut self) {
@@ -91,6 +94,9 @@ impl Editor {
                 _ => (),
             }
         }
+        else if let Resize(..) = event {
+            self.view.needs_redraw = true;
+        }
     }
 
     fn refresh_screen(&mut self) -> Result<(), Error> {
@@ -98,11 +104,10 @@ impl Editor {
         if self.should_quit {
             Terminal::clear_screen()?;
             Terminal::move_cursor_to(Position{row: 0, column: 0})?;
-            print!("Goodbye! \r\n");
         }
         else {
             let Size{num_rows, num_columns} = Terminal::size()?;
-            self.view.render()?;
+            self.view.render(self.top_left)?;
             if self.update_cursor {
                 if self.update_location.x < self.top_left.x {
                     self.top_left.x = self.update_location.x;
@@ -123,6 +128,7 @@ impl Editor {
         }
         Terminal::show_cursor()?;
         Terminal::execute()?;
+        self.view.needs_redraw = true;
         Ok(())
     }
 

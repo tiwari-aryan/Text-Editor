@@ -1,6 +1,7 @@
+use crate::editor::Location;
 use crate::terminal::{Terminal, Position, Size};
 use crate::buffer::Buffer;
-use std::io::Error;
+use std::{cmp::min, io::Error};
 
 const NAME: &str = env!("CARGO_PKG_NAME");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -8,6 +9,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Default)]
 pub struct View {
     buffer: Buffer,
+    pub needs_redraw: bool,
 }
 
 impl View {
@@ -18,22 +20,46 @@ impl View {
         }
     }
 
-    pub fn render(&self) -> Result<(), Error> {
-        let Size{num_rows, ..} = Terminal::size()?;
+    pub fn render(&mut self, top_left: Location) -> Result<(), Error> {
+        if self.needs_redraw {
+            if self.buffer.is_empty() {
+                Self::render_welcome_message()?;
+            }
+            else {
+                self.render_lines(top_left)?;
+            }
+        }
+        self.needs_redraw = false;
+        Ok(())
+    }
+
+    fn render_lines(&self, top_left: Location, ) -> Result<(), Error> {
+        let Size{num_rows, num_columns} = Terminal::size()?;
+        let Location{x, y} = top_left;
+
         for row in 0..num_rows {
             Terminal::move_cursor_to(Position{row, column: 0})?;
             Terminal::clear_line()?;
-            if let Some(line) = self.buffer.get_line(row as usize) {
-                Terminal::print(line)?;
+            if let Some(line) = self.buffer.get_line((row + y) as usize) {
+                let start_index: usize = min(x as usize, line.len());
+                let end_index: usize = min((x + num_columns) as usize, line.len());
+                Terminal::print(&line[start_index..end_index])?;
             }
             else {
                 Terminal::print("~")?;
             }
-            Terminal::print("\r")?;
         }
-        if self.buffer.is_empty() {
-            Self::draw_welcome_message()?;
+        Ok(())
+    }
+
+    fn render_welcome_message() -> Result<(), Error> {
+        let Size{num_rows, ..} = Terminal::size()?;
+        for row in 0..num_rows {
+            Terminal::move_cursor_to(Position{row, column: 0})?;
+            Terminal::clear_line()?;
+            Terminal::print("~")?;
         }
+        Self::draw_welcome_message()?;
         Ok(())
     }
 
