@@ -12,8 +12,6 @@ There is *so much* going on under the hood of console-based text editors, but it
 3. Using OOP to abstract the idea of a file
 4. Rendering/editing the file by interacting with the terminal
 
-### *How does it work?*
-
 ### Entering Raw Mode
 When you use the console during the execution of a program, you may notice that the console waits for the `Enter` key to be pressed before processing the characters. Additionally, all the characters you type show up on the line that you are typing on and pressing `Ctrl+C` completely halts the execution of the program. When editing a text file, *none* of these features are desirable. That's where terminal raw mode comes in. It process key presses immediately, does not print characters that are pressed, and allows the programmer to handle control key processing.
 
