@@ -20,47 +20,47 @@ impl View {
         }
     }
 
-    pub fn render(&mut self, top_left: Location) -> Result<(), Error> {
+    pub fn render(&mut self, top_left: Location) {
         if self.needs_redraw {
             if self.buffer.is_empty() {
-                Self::render_welcome_message()?;
+                Self::render_welcome_message();
             }
             else {
-                self.render_lines(top_left)?;
+                self.render_lines(top_left);
             }
         }
         self.needs_redraw = false;
-        Ok(())
     }
 
-    fn render_lines(&self, top_left: Location, ) -> Result<(), Error> {
-        let Size{num_rows, num_columns} = Terminal::size()?;
+    fn render_lines(&self, top_left: Location) {
+        let Size{num_rows, num_columns} = Terminal::size().unwrap_or_default();
         let Location{x, y} = top_left;
 
         for row in 0..num_rows {
-            Terminal::move_cursor_to(Position{row, column: 0})?;
-            Terminal::clear_line()?;
-            if let Some(line) = self.buffer.get_line((row + y) as usize) {
+            let _ = Terminal::move_cursor_to(Position{row, column: 0});
+            let _ = Terminal::clear_line();
+            let line_string: &str = if let Some(line) = self.buffer.get_line((row + y) as usize) {
                 let start_index: usize = min(x as usize, line.len());
                 let end_index: usize = min((x + num_columns) as usize, line.len());
-                Terminal::print(&line[start_index..end_index])?;
+                &line[start_index..end_index]
             }
             else {
-                Terminal::print("~")?;
-            }
+                "~"
+            };
+            let result = Terminal::print(line_string);
+            debug_assert!(result.is_ok(), "Error: Error occurred while printing line.");
         }
-        Ok(())
     }
 
-    fn render_welcome_message() -> Result<(), Error> {
-        let Size{num_rows, ..} = Terminal::size()?;
+    fn render_welcome_message() {
+        let Size{num_rows, ..} = Terminal::size().unwrap_or_default();
         for row in 0..num_rows {
-            Terminal::move_cursor_to(Position{row, column: 0})?;
-            Terminal::clear_line()?;
-            Terminal::print("~")?;
+            let _ = Terminal::move_cursor_to(Position{row, column: 0});
+            let _ = Terminal::clear_line();
+            let _ = Terminal::print("~");
         }
-        Self::draw_welcome_message()?;
-        Ok(())
+        let result = Self::draw_welcome_message();
+        debug_assert!(result.is_ok(), "Error: Error occurred while printing welcome message.");
     }
 
     fn draw_welcome_message() -> Result<(), Error> {

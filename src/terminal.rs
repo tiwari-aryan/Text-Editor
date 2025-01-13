@@ -16,14 +16,24 @@ pub struct Position {
     pub column: u16,
 }
 
+impl Default for Size {
+    fn default() -> Self {
+        // Default terminal size for Windows Terminal
+        Self{num_rows: 30, num_columns: 120}
+    }
+}
+
 pub struct Terminal {
     
 }
+
+
 
 impl Terminal {
     
     pub fn initialize() -> Result<(), Error> {
         enable_raw_mode()?;
+        Self::enter_alternate_screen()?;
         Self::clear_screen()?;
         Self::move_cursor_to(Position{row: 0, column: 0})?;
         Self::execute()?;
@@ -32,6 +42,7 @@ impl Terminal {
 
     pub fn terminate() -> Result<(), Error> {
         Self::execute()?;
+        Self::leave_alternate_screen()?;
         disable_raw_mode()?;
         Ok(())
     }

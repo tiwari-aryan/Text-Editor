@@ -2,7 +2,7 @@ use crate::terminal::{Terminal, Position, Size};
 use crate::view::View;
 
 use crossterm::event::{read, Event, Event::{Key, Resize}, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use std::{env, io::Error};
+use std::{env, io::Error, panic::{set_hook, take_hook}};
 
 #[derive(Copy, Clone, Default)]
 pub struct Location {
@@ -10,7 +10,6 @@ pub struct Location {
     pub y: u16,
 }
 
-#[derive(Default)]
 pub struct Editor {
     should_quit: bool,
     update_cursor: bool,
@@ -22,37 +21,46 @@ pub struct Editor {
 
 impl Editor {
 
-    pub fn run(&mut self) {
-        Terminal::enter_alternate_screen().unwrap();
-        Terminal::initialize().unwrap();
-        self.handle_args();
-        let result = self.repl();
-        Terminal::terminate().unwrap();
-        Terminal::leave_alternate_screen().unwrap();
-        result.unwrap();
-        print!("Goodbye! \r\n");
-    }
-
-    fn handle_args(&mut self) {
+    pub fn new() -> Result<Self, Error> {
+        let current_hook = take_hook();
+        set_hook(Box::new(move |panic_info| {
+            let _ = Terminal::terminate();
+            current_hook(panic_info);
+        }));
+        Terminal::initialize()?;
+        let mut view = View::default();
         let args: Vec<String> = env::args().collect();
         if let Some(file_path) = args.get(1) {
-            self.view.load(file_path);
+            view.load(file_path);
         }
+        Ok(Self{
+            should_quit: false,
+            update_cursor: false,
+            top_left: Location::default(),
+            location: Location::default(),
+            update_location: Location::default(),
+            view})
     }
 
-    fn repl(&mut self) -> Result<(), Error> {
+    pub fn run(&mut self) {
         loop {
-            self.refresh_screen()?;
+            self.refresh_screen();
             if self.should_quit {
                 break;
             }
-            let event = read()?;
-            self.evaluate_event(&event);
+            match read() {
+                Ok(event) => self.evaluate_event(event),
+                Err(err) => {
+                    #[cfg(debug_assertions)]
+                    {
+                        panic!("Error: Could not read event {err:?}")
+                    }
+                }
+            }
         }
-        Ok(())
     }
 
-    fn evaluate_move_event(&mut self, code: &KeyCode){
+    fn evaluate_move_event(&mut self, code: KeyCode) {
         match code {
             KeyCode::Up if self.update_location.y > 0 => {
                 self.update_location.y -= 1;
@@ -74,7 +82,7 @@ impl Editor {
         }
     }
 
-    fn evaluate_event(&mut self, event: &Event) {
+    fn evaluate_event(&mut self, event: Event) {
         if let Key(KeyEvent {
             code,
             modifiers,
@@ -82,7 +90,7 @@ impl Editor {
             ..
         }) = event {
             match code {
-                KeyCode::Char('q') if *modifiers == KeyModifiers::CONTROL => {
+                KeyCode::Char('q') if modifiers == KeyModifiers::CONTROL => {
                     self.should_quit = true;
                 },
                 KeyCode::Up
@@ -99,37 +107,39 @@ impl Editor {
         }
     }
 
-    fn refresh_screen(&mut self) -> Result<(), Error> {
-        Terminal::hide_cursor()?;
-        if self.should_quit {
-            Terminal::clear_screen()?;
-            Terminal::move_cursor_to(Position{row: 0, column: 0})?;
-        }
-        else {
-            let Size{num_rows, num_columns} = Terminal::size()?;
-            self.view.render(self.top_left)?;
-            if self.update_cursor {
-                if self.update_location.x < self.top_left.x {
-                    self.top_left.x = self.update_location.x;
-                }
-                if self.update_location.y < self.top_left.y {
-                    self.top_left.y = self.update_location.y;
-                }
-                if self.update_location.x >= self.top_left.x + num_columns {
-                    self.top_left.x = self.update_location.x - num_columns + 1;
-                }
-                if self.update_location.y >= self.top_left.y + num_rows {
-                    self.top_left.y = self.update_location.y - num_rows + 1;
-                }
-                self.location = self.update_location;
-                self.update_cursor = false;
+    fn refresh_screen(&mut self) {
+        let _ = Terminal::hide_cursor();
+        let Size{num_rows, num_columns} = Terminal::size().unwrap_or_default();
+        self.view.render(self.top_left);
+        if self.update_cursor {
+            if self.update_location.x < self.top_left.x {
+                self.top_left.x = self.update_location.x;
             }
-            Terminal::move_cursor_to(Position{row: self.update_location.y - self.top_left.y, column: self.update_location.x - self.top_left.x})?;
+            if self.update_location.y < self.top_left.y {
+                self.top_left.y = self.update_location.y;
+            }
+            if self.update_location.x >= self.top_left.x + num_columns {
+                self.top_left.x = self.update_location.x - num_columns + 1;
+            }
+            if self.update_location.y >= self.top_left.y + num_rows {
+                self.top_left.y = self.update_location.y - num_rows + 1;
+            }
+            self.location = self.update_location;
+            self.update_cursor = false;
+            self.view.needs_redraw = true;
         }
-        Terminal::show_cursor()?;
-        Terminal::execute()?;
-        self.view.needs_redraw = true;
-        Ok(())
+        let _ = Terminal::move_cursor_to(Position{row: self.update_location.y - self.top_left.y, column: self.update_location.x - self.top_left.x});
+        let _ = Terminal::show_cursor();
+        let _ = Terminal::execute();
     }
 
+}
+
+impl Drop for Editor {
+    fn drop(&mut self){
+        let _ = Terminal::terminate();
+        if self.should_quit {
+            let _ = Terminal::print("Goodbye!\r\n");
+        }
+    }
 }
