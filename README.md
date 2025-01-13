@@ -2,7 +2,7 @@
 
 ## Overview
 
-As an introduction to the Rust language, I decided to make a console-based text editor, similar to nano or Vim. It currently offers support for viewing and editing documents that contain all UTF-8 characters, including emojis and alternate languages as well! It also has the added feature of syntax highlighting for keywords, characters, strings, and comments.
+As an introduction to the Rust language, I decided to make a console-based text editor using a [https://www.flenker.blog/hecto/](tutorial by Philipp Flenker), similar to nano or Vim. It currently offers support for viewing and editing documents that contain all UTF-8 characters, including emojis and alternate languages as well! It also has the added feature of syntax highlighting for keywords, characters, strings, and comments.
 ## Implementation
 
 There is *so much* going on under the hood of console-based text editors, but it can be broken down into a few key components:
