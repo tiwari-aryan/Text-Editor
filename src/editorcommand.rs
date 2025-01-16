@@ -1,3 +1,5 @@
+use crate::terminal::Size;
+
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use std::convert::TryFrom;
 
@@ -20,7 +22,7 @@ pub enum EditorCommand {
     Backspace,
     Delete,
     Enter,
-    Resize,
+    Resize(Size),
     Save,
     Quit,
 }
@@ -49,7 +51,7 @@ impl TryFrom<Event> for EditorCommand {
                 (KeyCode::Char(character), KeyModifiers::NONE | KeyModifiers::SHIFT) => Ok(Self::Insert(character)),
                 _ => Err(format!("Key Code not supported: {code:?}")),
             },
-            Event::Resize(_, _) => Ok(Self::Resize),
+            Event::Resize(num_columns, num_rows) => Ok(Self::Resize(Size{num_rows: num_rows as usize, num_columns: num_columns as usize})),
             _ => Err(format!("Event not supported: {event:?}")),
         }
     }

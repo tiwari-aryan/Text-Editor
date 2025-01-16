@@ -5,8 +5,10 @@ pub mod editorcommand;
 pub mod terminal;
 pub mod view;
 pub mod statusbar;
+pub mod messagebar;
 pub mod buffer;
 pub mod line;
+pub mod uicomponent;
 use editor::Editor;
 
 fn main() { 

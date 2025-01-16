@@ -1,10 +1,10 @@
-use crossterm::terminal::{enable_raw_mode, disable_raw_mode, Clear, ClearType, size, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{enable_raw_mode, disable_raw_mode, Clear, ClearType, size, EnterAlternateScreen, LeaveAlternateScreen, EnableLineWrap, DisableLineWrap, SetTitle};
 use crossterm::{queue, Command};
 use crossterm::cursor::{MoveTo, Show, Hide};
 use crossterm::style::{Attribute, Print};
 use std::io::{stdout, Write, Error};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct Size {
     pub num_rows: usize,
     pub num_columns: usize, 
@@ -34,6 +34,7 @@ impl Terminal {
     pub fn initialize() -> Result<(), Error> {
         enable_raw_mode()?;
         Self::enter_alternate_screen()?;
+        Self::disable_line_wrap()?;
         Self::clear_screen()?;
         Self::move_cursor_to(Position{row: 0, column: 0})?;
         Self::execute()?;
@@ -42,6 +43,7 @@ impl Terminal {
 
     pub fn terminate() -> Result<(), Error> {
         Self::execute()?;
+        Self::disable_line_wrap()?;
         Self::leave_alternate_screen()?;
         disable_raw_mode()?;
         Ok(())
@@ -59,6 +61,21 @@ impl Terminal {
 
     pub fn leave_alternate_screen() -> Result<(), Error> {
         Self::queue_command(LeaveAlternateScreen)?;
+        Ok(())
+    }
+
+    pub fn enable_line_wrap() -> Result<(), Error> {
+        Self::queue_command(EnableLineWrap)?;
+        Ok(())
+    }
+
+    pub fn disable_line_wrap() -> Result<(), Error> {
+        Self::queue_command(DisableLineWrap)?;
+        Ok(())
+    }
+
+    pub fn set_title(title: &str) -> Result<(), Error> {
+        Self::queue_command(SetTitle(title))?;
         Ok(())
     }
 

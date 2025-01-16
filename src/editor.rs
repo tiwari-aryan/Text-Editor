@@ -1,10 +1,12 @@
 use crate::editorcommand::EditorCommand;
-use crate::terminal::Terminal;
+use crate::terminal::{Terminal, Size};
 use crate::view::View;
 use crate::statusbar::StatusBar;
+use crate::messagebar::MessageBar;
+use crate::uicomponent::UIComponent;
 
 use crossterm::event::{read, Event, KeyEvent, KeyEventKind};
-use std::{env, io::Error, panic::{set_hook, take_hook}};
+use std::{cmp, env, io::Error, panic::{set_hook, take_hook}};
 
 #[derive(Copy, Clone, Default)]
 pub struct Location {
@@ -20,10 +22,13 @@ pub struct DocumentStatus {
     pub is_modified: bool,
 }
 
+#[derive(Default)]
 pub struct Editor {
     should_quit: bool,
     view: View,
     status_bar: StatusBar,
+    message_bar: MessageBar,
+    size: Size,
 }
 
 impl Editor {
@@ -35,16 +40,18 @@ impl Editor {
             current_hook(panic_info);
         }));
         Terminal::initialize()?;
-        let mut view = View::new(2);
+        let mut editor = Self::default();
+        editor.size = Terminal::size().unwrap_or_default();
+        editor.resize(editor.size);
+
         let args: Vec<String> = env::args().collect();
         if let Some(file_path) = args.get(1) {
-            view.load(file_path);
+            editor.view.load(file_path);
+            Terminal::set_title(&file_path)?;
         }
-        Ok(Self{
-            should_quit: false,
-            view,
-            status_bar: StatusBar::default(),
-        })
+
+        editor.message_bar.set_message("HELP: Ctrl-S = save | Ctrl-Q = quit".to_string());
+        Ok(editor)
     }
 
     pub fn run(&mut self) {
@@ -65,6 +72,13 @@ impl Editor {
         }
     }
 
+    pub fn resize(&mut self, size: Size) {
+        self.size = size;
+        self.view.resize(Size{num_rows: size.num_rows - 2, num_columns: size.num_columns});
+        self.status_bar.resize(Size{num_rows: 1, num_columns: size.num_columns});
+        self.message_bar.resize(Size{num_rows: 1, num_columns: size.num_columns});
+    }
+
     fn evaluate_event(&mut self, event: Event) {
         let should_process = match &event {
             Event::Key(KeyEvent{kind, ..}) => kind == &KeyEventKind::Press,
@@ -76,9 +90,9 @@ impl Editor {
                 if matches!(command, EditorCommand::Quit) {
                     self.should_quit = true;
                 }
-                else if matches!(command, EditorCommand::Resize) {
-                    self.view.needs_redraw = true;
-                    self.status_bar.needs_redraw = true;
+                else if let EditorCommand::Resize(size) = command {
+                    self.resize(size);
+                    self.view.set_redraw(true);
                 }
                 else {
                     self.view.handle_command(command);
@@ -88,10 +102,20 @@ impl Editor {
     }
 
     fn refresh_screen(&mut self) {
+        if self.size.num_rows == 0 || self.size.num_columns == 0 {
+            return;
+        }
         let _ = Terminal::hide_cursor();
         self.status_bar.set_status(self.view.get_status());
-        self.view.render();
-        self.status_bar.render();
+        if self.size.num_rows > 0 {
+            self.message_bar.render(self.size.num_rows - 1);
+        }
+        if self.size.num_rows > 1 {
+            self.status_bar.render(self.size.num_rows - 2);
+        }
+        if self.size.num_rows > 2 {
+            self.view.render(0);
+        }
         let _ = Terminal::move_cursor_to(self.view.get_cursor_position());
         let _ = Terminal::show_cursor();
         let _ = Terminal::execute();
