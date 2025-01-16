@@ -5,8 +5,9 @@ use crate::line::Line;
 
 #[derive(Default)]
 pub struct Buffer {
-    save_file_path: Option<String>,
+    pub save_file_path: Option<String>,
     lines: Vec<Line>,
+    pub is_modified: bool,
 }
 
 impl Buffer {
@@ -17,7 +18,7 @@ impl Buffer {
         for line in file_contents.lines() {
             lines.push(Line::from(line));
         }
-        Ok(Self{save_file_path: Some(file_path.to_string()), lines})
+        Ok(Self{save_file_path: Some(file_path.to_string()), lines, is_modified: false})
     }
 
     pub fn save_file(&self) -> Result<(), Error> {
@@ -62,6 +63,7 @@ impl Buffer {
         else{
             panic!("Error: Could not add character.");
         }
+        self.is_modified = true;
     }
 
     pub fn delete_character(&mut self, location: Location) {
@@ -77,6 +79,7 @@ impl Buffer {
         else {
             panic!("Error: Could not delete character.");
         }
+        self.is_modified = true;
     }
 
     pub fn enter(&mut self, location: Location) {
@@ -91,6 +94,7 @@ impl Buffer {
         else if (y as usize) == self.get_num_rows() {
             self.lines.push(Line{string: String::from("")});
         }
+        self.is_modified = true;
     }
 
 }

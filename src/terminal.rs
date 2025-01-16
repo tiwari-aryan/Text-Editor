@@ -1,19 +1,19 @@
 use crossterm::terminal::{enable_raw_mode, disable_raw_mode, Clear, ClearType, size, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{queue, Command};
 use crossterm::cursor::{MoveTo, Show, Hide};
-use crossterm::style::Print;
+use crossterm::style::{Attribute, Print};
 use std::io::{stdout, Write, Error};
 
 #[derive(Copy, Clone)]
 pub struct Size {
-    pub num_rows: u16,
-    pub num_columns: u16, 
+    pub num_rows: usize,
+    pub num_columns: usize, 
 }
 
 #[derive(Copy, Clone)]
 pub struct Position {
-    pub row: u16,
-    pub column: u16,
+    pub row: usize,
+    pub column: usize,
 }
 
 impl Default for Size {
@@ -62,6 +62,16 @@ impl Terminal {
         Ok(())
     }
 
+    pub fn reverse_colour() -> Result<(), Error> {
+        Self::queue_command(Print(Attribute::Reverse))?;
+        Ok(())
+    }
+
+    pub fn reset_colour() -> Result<(), Error> {
+        Self::queue_command(Print(Attribute::Reset))?;
+        Ok(())
+    }
+
     pub fn print(string: &str) -> Result<(), Error> {
         Self::queue_command(Print(string))?;
         Ok(())
@@ -88,13 +98,13 @@ impl Terminal {
     }
 
     pub fn move_cursor_to(position: Position) -> Result<(), Error> {
-        Self::queue_command(MoveTo(position.column, position.row))?;
+        Self::queue_command(MoveTo(position.column as u16, position.row as u16))?;
         Ok(())
     }
 
     pub fn size() -> Result<Size, Error> {
         let (num_columns, num_rows) = size()?;
-        Ok(Size{num_rows, num_columns})
+        Ok(Size{num_rows: num_rows as usize, num_columns: num_columns as usize})
     }
 
     pub fn queue_command(command: impl Command) -> Result<(), Error> {

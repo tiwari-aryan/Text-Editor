@@ -4,6 +4,7 @@ pub mod editor;
 pub mod editorcommand;
 pub mod terminal;
 pub mod view;
+pub mod statusbar;
 pub mod buffer;
 pub mod line;
 use editor::Editor;

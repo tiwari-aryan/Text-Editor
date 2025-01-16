@@ -1,5 +1,5 @@
-use crate::editor::Location;
-use crate::editorcommand::{EditorCommand, Direction, EditorCommand::{Move, Insert, Backspace, Delete, Enter, Resize, Save}};
+use crate::editor::{Location, DocumentStatus};
+use crate::editorcommand::{EditorCommand, Direction, EditorCommand::{Move, Insert, Backspace, Delete, Enter, Save}};
 use crate::terminal::{Terminal, Position, Size};
 use crate::buffer::Buffer;
 use std::{cmp, io::Error};
@@ -10,12 +10,23 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Default)]
 pub struct View {
     buffer: Buffer,
-    needs_redraw: bool,
+    pub needs_redraw: bool,
     top_left: Location,
     location: Location,
+    bottom_margin: usize,
 }
 
 impl View {
+
+    pub fn new(bottom_margin: usize) -> Self {
+        Self {
+            buffer: Buffer::default(),
+            needs_redraw: true,
+            top_left: Location::default(),
+            location: Location::default(),
+            bottom_margin,
+        }
+    }
 
     pub fn load(&mut self, file_path: &str) {
         if let Ok(buffer) = Buffer::load(file_path) {
@@ -23,11 +34,17 @@ impl View {
         }
     }
 
+    pub fn get_status(&self) -> DocumentStatus {
+        let total_lines = self.buffer.get_num_rows();
+        DocumentStatus{
+            file_path: self.buffer.save_file_path.clone(),
+            current_line: cmp::min(self.location.y + 1, total_lines),
+            total_lines,
+            is_modified: self.buffer.is_modified}
+    }
+
     pub fn handle_command(&mut self, command: EditorCommand) {
         match command {
-            Resize => {
-                self.needs_redraw = true;
-            },
             Move(direction) => {
                 self.move_cursor(&direction);
                 self.needs_redraw = true;
@@ -41,8 +58,8 @@ impl View {
                 self.handle_command(Delete);
                 self.needs_redraw = true;
             },
-            Delete if ((self.location.x as usize) < self.buffer.get_num_columns(self.location.y as usize)) |
-                        ((self.location.y as usize) < self.buffer.get_num_rows() - 1) => {
+            Delete if (self.location.x < self.buffer.get_num_columns(self.location.y)) |
+                        (self.location.y < self.buffer.get_num_rows() - 1) => {
                 self.delete_character();
                 self.needs_redraw = true;
             },
@@ -62,11 +79,11 @@ impl View {
         match direction {
             Direction::Up if self.location.y > 0 => {
                 self.location.y -= 1;
-                self.location.x = cmp::min(self.location.x, self.buffer.get_num_columns(self.location.y as usize) as u16);
+                self.location.x = cmp::min(self.location.x, self.buffer.get_num_columns(self.location.y));
             },
-            Direction::Down if (self.location.y as usize) < self.buffer.get_num_rows() => {
+            Direction::Down if self.location.y < self.buffer.get_num_rows() => {
                 self.location.y += 1;
-                self.location.x = cmp::min(self.location.x, self.buffer.get_num_columns(self.location.y as usize) as u16);
+                self.location.x = cmp::min(self.location.x, self.buffer.get_num_columns(self.location.y));
             },
             Direction::Left => {
                 if self.location.x > 0 {
@@ -74,31 +91,31 @@ impl View {
                 }
                 else if self.location.y > 0 {
                     self.location.y -= 1;
-                    self.location.x = self.buffer.get_num_columns(self.location.y as usize) as u16;
+                    self.location.x = self.buffer.get_num_columns(self.location.y);
                 }
             },
             Direction::Right => {
-                if (self.location.x as usize) < self.buffer.get_num_columns(self.location.y as usize) {
+                if (self.location.x) < self.buffer.get_num_columns(self.location.y) {
                     self.location.x += 1;
                 }
-                else if (self.location.y as usize) < self.buffer.get_num_rows() {
+                else if (self.location.y) < self.buffer.get_num_rows() {
                     self.location.y += 1;
                     self.location.x = 0;
                 }
             },
             Direction::PageUp => {
                 self.location.y = cmp::max(0, self.location.y - num_rows);
-                self.location.x = cmp::min(self.location.x, self.buffer.get_num_columns(self.location.y as usize) as u16);
+                self.location.x = cmp::min(self.location.x, self.buffer.get_num_columns(self.location.y));
             },
             Direction::PageDown => {
-                self.location.y = cmp::min(self.buffer.get_num_rows() as u16, self.location.y + num_rows);
-                self.location.x = cmp::min(self.location.x, self.buffer.get_num_columns(self.location.y as usize) as u16);
+                self.location.y = cmp::min(self.buffer.get_num_rows(), self.location.y + num_rows);
+                self.location.x = cmp::min(self.location.x, self.buffer.get_num_columns(self.location.y));
             },
             Direction::Home => {
                 self.location.x = 0;
             },
             Direction::End => {
-                self.location.x = self.buffer.get_num_columns(self.location.y as usize) as u16;
+                self.location.x = self.buffer.get_num_columns(self.location.y);
             },
             _ => (),
         }
@@ -116,8 +133,8 @@ impl View {
         if self.location.x >= self.top_left.x + num_columns {
             self.top_left.x = self.location.x - num_columns + 1;
         }
-        if self.location.y >= self.top_left.y + num_rows {
-            self.top_left.y = self.location.y - num_rows + 1;
+        if self.location.y >= self.top_left.y + num_rows - self.bottom_margin {
+            self.top_left.y = self.location.y + self.bottom_margin + 1 - num_rows;
         }
         self.needs_redraw = true;
     }
@@ -159,17 +176,17 @@ impl View {
     }
 
     fn render_lines(&self) {
-        // TODO: Make size a parameter of View and update it when Resize is called rather than using Terminal::size() each time
+        // TODO: Make size a member of View and update it when Resize is called rather than using Terminal::size() each time
         let Size{num_rows, num_columns} = Terminal::size().unwrap_or_default();
         let Location{x, y} = self.top_left;
 
-        for row in 0..num_rows {
+        for row in 0..num_rows-self.bottom_margin {
             let _ = Terminal::move_cursor_to(Position{row, column: 0});
             let _ = Terminal::clear_line();
-            if let Some(line) = self.buffer.get_line((row + y) as usize) {
-                let result = Terminal::print(&line.get(x as usize..(x+num_columns) as usize));
+            if let Some(line) = self.buffer.get_line(row + y) {
+                let result = Terminal::print(&line.get(x..x+num_columns));
                 debug_assert!(result.is_ok(), "Error: Error occurred while printing line.");
-            };
+            }
         }
     }
 
@@ -188,8 +205,8 @@ impl View {
         let Size{num_rows, num_columns} = Terminal::size()?;
         let row = num_rows / 3;
         let mut message = format!("{NAME} Editor -- v{VERSION}");
-        message.truncate((num_columns - 1) as usize);
-        let column = (num_columns - (message.len() as u16)) / 2;
+        message.truncate(num_columns - 1);
+        let column = (num_columns - message.len()) / 2;
         Terminal::move_cursor_to(Position{row, column})?;
         Terminal::print(&message)?;
         Ok(())
